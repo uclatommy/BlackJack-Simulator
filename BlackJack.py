@@ -434,7 +434,10 @@ class Game(object):
         # print "Player Hand: %s\n" % self.player.hands[0]
 
         self.player.play(self.shoe)
-        self.dealer.play(self.shoe)
+        if not self.player.hands[0].busted():
+            self.dealer.play(self.shoe)
+        else:
+            dealer_hand.add_card(self.shoe.deal())
 
         # print ""
 
