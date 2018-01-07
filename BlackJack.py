@@ -5,6 +5,7 @@ import numpy as np
 import scipy.stats as stats
 import pylab as pl
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from importer.StrategyImporter import StrategyImporter
 
@@ -16,7 +17,7 @@ BET_SPREAD = 20.0
 
 DECK_SIZE = 52.0
 CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
-BASIC_OMEGA_II = {"Ace": 0, "Two": 1, "Three": 1, "Four": 2, "Five": 2, "Six": 2, "Seven": 1, "Eight": 0, "Nine": -1, "Ten": -2, "Jack": -2, "Queen": -2, "King": -2}
+BASIC_OMEGA_II = {"Ace": 0, "Two": 1, "Three": 1, "Four": 2, "Five": 2, "Six": 2, "Seven": 1, "Eight": 0, "Nine":-1, "Ten":-2, "Jack":-2, "Queen":-2, "King":-2}
 
 BLACKJACK_RULES = {
     'triple7': False,  # Count 3x7 as a blackjack
@@ -37,6 +38,10 @@ class Card(object):
 
     def __str__(self):
         return "%s" % self.name
+
+    @property
+    def count(self):
+        return BASIC_OMEGA_II[self.name]
 
 
 class Shoe(object):
@@ -134,7 +139,7 @@ class Hand(object):
     def __str__(self):
         h = ""
         for c in self.cards:
-            h += "%s " % c
+            h += "%s[%s] " % (c, c.count)
         return h
 
     @property
@@ -243,6 +248,26 @@ class Hand(object):
         return len(self.cards)
 
 
+class Log(object):
+    """
+    Represents a history of hands and associated actions.
+    """
+    def __init__(self):
+        self.hands = None
+
+    def add_hand(self, action, hand, dealer_hand, shoe):
+        d = {'hand': [hand.value], 'soft': [hand.soft()],
+             'splitable': [hand.splitable()],
+             'dealer': [dealer_hand.cards[0].value],
+             'truecount': [shoe.truecount()], 'action': [action.upper()]
+             }
+        if self.hands is None:
+            self.hands = pd.DataFrame(data=d)
+        else:
+            self.hands = self.hands.append(pd.DataFrame(data=d))
+            print(self.hands)
+
+
 class Player(object):
     """
     Represent a player
@@ -250,6 +275,8 @@ class Player(object):
     def __init__(self, hand=None, dealer_hand=None):
         self.hands = [hand]
         self.dealer_hand = dealer_hand
+        self.autoplay = True
+        self.history = Log()
 
     def set_hands(self, new_hand, new_dealer_hand):
         self.hands = [new_hand]
@@ -267,14 +294,22 @@ class Player(object):
             self.hit(hand, shoe)
 
         while not hand.busted() and not hand.blackjack():
-            if hand.soft():
-                flag = SOFT_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
-            elif hand.splitable():
-                flag = PAIR_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+            if self.autoplay:
+                if hand.soft():
+                    flag = SOFT_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                elif hand.splitable():
+                    flag = PAIR_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                else:
+                    flag = HARD_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
             else:
-                flag = HARD_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                print("Dealer Hand: %s (%d)" % (self.dealer_hand, self.dealer_hand.value))
+                print("Player Hand: %s (%d)" % (self.hands[0], self.hands[0].value))
+                print("Count=%s, Penetration=%s\n" % ("{0:.2f}".format(shoe.count), "{0:.2f}".format(shoe.shoe_penetration())))
+                flag = input("Action (H=Hit, S=Stand, D=Double, P=Split, Sr=Surrender, Q=Quit): ")
+                if flag != 'Q':
+                    self.history.add_hand(flag, hand, self.dealer_hand, shoe)
 
-            if flag == 'D':
+            if flag.upper() == 'D':
                 if hand.length() == 2:
                     # print "Double Down"
                     hand.doubled = True
@@ -283,7 +318,7 @@ class Player(object):
                 else:
                     flag = 'H'
 
-            if flag == 'Sr':
+            if flag.upper() == 'SR':
                 if hand.length() == 2:
                     # print "Surrender"
                     hand.surrender = True
@@ -291,14 +326,17 @@ class Player(object):
                 else:
                     flag = 'H'
 
-            if flag == 'H':
+            if flag.upper() == 'H':
                 self.hit(hand, shoe)
 
-            if flag == 'P':
+            if flag.upper() == 'P':
                 self.split(hand, shoe)
 
-            if flag == 'S':
+            if flag.upper() == 'S':
                 break
+
+            if flag.upper() == 'Q':
+                exit()
 
     def hit(self, hand, shoe):
         c = shoe.deal()
@@ -356,7 +394,7 @@ class Tree(object):
         for p in self.tree[-1] :
             for v in stat_card :
                 new_value = v + p
-                proba = self.tree[-1][p]*stat_card[v]
+                proba = self.tree[-1][p] * stat_card[v]
                 if (new_value > 21) :
                     # All busted values are 22
                     new_value = 22
@@ -421,10 +459,18 @@ class Game(object):
         return win, bet
 
     def play_round(self):
-        if self.shoe.truecount() > 6:
-            self.stake = BET_SPREAD
+        if self.player.autoplay:
+            if self.shoe.truecount() > 6:
+                self.stake = BET_SPREAD
+            else:
+                self.stake = 1.0
         else:
-            self.stake = 1.0
+            raw_stake = input("Bet (%s): " % self.stake)
+            if raw_stake != "":
+                try:
+                    self.stake = float(raw_stake)
+                except ValueError:
+                    print("Invalid bet, using default.")
 
         player_hand = Hand([self.shoe.deal(), self.shoe.deal()])
         dealer_hand = Hand([self.shoe.deal()])
@@ -464,11 +510,18 @@ if __name__ == "__main__":
     bets = []
     countings = []
     nb_hands = 0
+    GAMES = int(input("How many games? "))
     for g in range(GAMES):
         game = Game()
+        autoplay = input("Autoplay? (y/n): ")
+        if autoplay == 'n':
+            game.player.autoplay = False
         while not game.shoe.reshuffle:
             # print '%s GAME no. %d %s' % (20 * '#', i + 1, 20 * '#')
             game.play_round()
+            print("Dealer Hand: %s (%d)" % (game.dealer.hand, game.dealer.hand.value))
+            print("Player Hand: %s (%d)\n" % (game.player.hands[0], game.player.hands[0].value))
+
             nb_hands += 1
 
         moneys.append(game.get_money())
@@ -484,9 +537,9 @@ if __name__ == "__main__":
     for value in bets:
         total_bet += value
 
-    print "\n%d hands overall, %0.2f hands per game on average" % (nb_hands, float(nb_hands) / GAMES)
-    print "%0.2f total bet" % total_bet
-    print("Overall winnings: {} (edge = {} %)".format("{0:.2f}".format(sume), "{0:.3f}".format(100.0*sume/total_bet)))
+    print("\n%d hands overall, %0.2f hands per game on average" % (nb_hands, float(nb_hands) / GAMES))
+    print("%0.2f total bet" % total_bet)
+    print("Overall winnings: {} (edge = {} %)".format("{0:.2f}".format(sume), "{0:.3f}".format(100.0 * sume / total_bet)))
 
     moneys = sorted(moneys)
     fit = stats.norm.pdf(moneys, np.mean(moneys), np.std(moneys))  # this is a fitting indeed
