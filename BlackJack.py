@@ -1,4 +1,5 @@
 import sys
+import os
 from random import shuffle
 
 import numpy as np
@@ -10,6 +11,7 @@ import pandas as pd
 from importer.StrategyImporter import StrategyImporter
 
 
+scriptDirectory = os.path.dirname(os.path.realpath(__file__))
 GAMES = 20000
 SHOE_SIZE = 6
 SHOE_PENETRATION = 0.25
@@ -205,7 +207,7 @@ class Hand(object):
 
     def splitable(self):
         """
-        Determines if the current hand can be splitted.
+        Determines if the current hand can be split.
         """
         if self.length() == 2 and self.cards[0].name == self.cards[1].name:
             return True
@@ -266,7 +268,13 @@ class Log(object):
     Represents a history of hands and associated actions.
     """
     def __init__(self):
-        self.hands = None
+        try:
+            self.hands = pd.read_pickle(scriptDirectory+'/player_history')
+        except FileNotFoundError:
+            self.hands = None
+
+    def __str__(self):
+        print(self.hands)
 
     def add_hand(self, action, hand, dealer_hand, shoe):
         d = {'hand': [hand.value], 'soft': [hand.soft()],
@@ -278,7 +286,9 @@ class Log(object):
             self.hands = pd.DataFrame(data=d)
         else:
             self.hands = self.hands.append(pd.DataFrame(data=d))
-            print(self.hands)
+
+    def save(self):
+        self.hands.to_pickle(scriptDirectory+'/player_history')
 
 
 class Player(object):
@@ -556,6 +566,8 @@ if __name__ == "__main__":
               (g + 1, "{0:.2f}".format(game.get_money()),
                "{0:.2f}".format(game.get_bet())))
 
+    if game.player.autoplay is False:
+        game.player.history.save()
     sume = 0.0
     total_bet = 0.0
     for value in moneys:
