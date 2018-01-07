@@ -16,8 +16,15 @@ SHOE_PENETRATION = 0.25
 BET_SPREAD = 20.0
 
 DECK_SIZE = 52.0
-CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
-BASIC_OMEGA_II = {"Ace": 0, "Two": 1, "Three": 1, "Four": 2, "Five": 2, "Six": 2, "Seven": 1, "Eight": 0, "Nine":-1, "Ten":-2, "Jack":-2, "Queen":-2, "King":-2}
+CARDS = {
+    "Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6,
+    "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10,
+    "King": 10
+    }
+BASIC_OMEGA_II = {
+    "Ace": 0, "Two": 1, "Three": 1, "Four": 2, "Five": 2, "Six": 2, "Seven": 1,
+    "Eight": 0, "Nine": -1, "Ten": -2, "Jack": -2, "Queen": -2, "King": -2
+    }
 
 BLACKJACK_RULES = {
     'triple7': False,  # Count 3x7 as a blackjack
@@ -81,16 +88,17 @@ class Shoe(object):
 
     def init_count(self):
         """
-        Keep track of the number of occurrences for each card in the shoe in the course over the game. ideal_count
-        is a dictionary containing (card name - number of occurrences in shoe) pairs
+        Keep track of the number of occurrences for each card in the shoe in
+        the course over the game. ideal_count is a dictionary containing (card
+        name - number of occurrences in shoe) pairs
         """
         for card in CARDS:
             self.ideal_count[card] = 4 * SHOE_SIZE
 
     def deal(self):
         """
-        Returns:    The next card off the shoe. If the shoe penetration is reached,
-                    the shoe gets reshuffled.
+        Returns:    The next card off the shoe. If the shoe penetration is 
+                    reached, the shoe gets reshuffled.
         """
         if self.shoe_penetration() < SHOE_PENETRATION:
             self.reshuffle = True
@@ -117,7 +125,8 @@ class Shoe(object):
 
     def shoe_penetration(self):
         """
-        Returns: Ratio of cards that are still in the shoe to all initial cards.
+        Returns: Ratio of cards that are still in the shoe to all initial
+                 cards.
         """
         return len(self.cards) / (DECK_SIZE * self.decks)
 
@@ -145,7 +154,8 @@ class Hand(object):
     @property
     def value(self):
         """
-        Returns: The current value of the hand (aces are either counted as 1 or 11).
+        Returns: The current value of the hand (aces are either counted as 1 or
+        11).
         """
         self._value = 0
         for c in self.cards:
@@ -185,7 +195,8 @@ class Hand(object):
 
     def soft(self):
         """
-        Determines whether the current hand is soft (soft means that it consists of aces valued at 11).
+        Determines whether the current hand is soft (soft means that it
+        consists of aces valued at 11).
         """
         if self.aces_soft > 0:
             return True
@@ -203,10 +214,12 @@ class Hand(object):
 
     def blackjack(self):
         """
-        Check a hand for a blackjack, taking the defined BLACKJACK_RULES into account.
+        Check a hand for a blackjack, taking the defined BLACKJACK_RULES into
+        account.
         """
         if not self.splithand and self.value == 21:
-            if all(c.value == 7 for c in self.cards) and BLACKJACK_RULES['triple7']:
+            if (all(c.value == 7 for c in self.cards) and
+                    BLACKJACK_RULES['triple7']):
                 return True
             elif self.length() == 2:
                 return True
@@ -296,16 +309,24 @@ class Player(object):
         while not hand.busted() and not hand.blackjack():
             if self.autoplay:
                 if hand.soft():
-                    flag = SOFT_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                    flag = SOFT_STRATEGY[hand.value][
+                        self.dealer_hand.cards[0].name]
                 elif hand.splitable():
-                    flag = PAIR_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                    flag = PAIR_STRATEGY[hand.value][
+                        self.dealer_hand.cards[0].name]
                 else:
-                    flag = HARD_STRATEGY[hand.value][self.dealer_hand.cards[0].name]
+                    flag = HARD_STRATEGY[hand.value][
+                        self.dealer_hand.cards[0].name]
             else:
-                print("Dealer Hand: %s (%d)" % (self.dealer_hand, self.dealer_hand.value))
-                print("Player Hand: %s (%d)" % (self.hands[0], self.hands[0].value))
-                print("Count=%s, Penetration=%s\n" % ("{0:.2f}".format(shoe.count), "{0:.2f}".format(shoe.shoe_penetration())))
-                flag = input("Action (H=Hit, S=Stand, D=Double, P=Split, Sr=Surrender, Q=Quit): ")
+                print("Dealer Hand: %s (%d)" %
+                      (self.dealer_hand, self.dealer_hand.value))
+                print("Player Hand: %s (%d)" %
+                      (self.hands[0], self.hands[0].value))
+                print("Count=%s, Penetration=%s\n" %
+                      ("{0:.2f}".format(shoe.count),
+                       "{0:.2f}".format(shoe.shoe_penetration())))
+                flag = input("Action (H=Hit, S=Stand, D=Double, P=Split, "
+                             "Sr=Surrender, Q=Quit): ")
                 if flag != 'Q':
                     self.history.add_hand(flag, hand, self.dealer_hand, shoe)
 
@@ -368,13 +389,16 @@ class Dealer(object):
         self.hand.add_card(c)
         # print "Dealer hitted: %s" %c
 
-    # Returns an array of 6 numbers representing the probability that the final score of the dealer is
+    # Returns an array of 6 numbers representing the probability that the final
+    # score of the dealer is
     # [17, 18, 19, 20, 21, Busted] '''
     # TODO Differentiate 21 and BJ
     # TODO make an actual tree, this is false AF
-    def get_probabilities(self) :
+    def get_probabilities(self):
         start_value = self.hand.value
-        # We'll draw 5 cards no matter what an count how often we got 17, 18, 19, 20, 21, Busted
+        # We'll draw 5 cards no matter what an count how often we got 17, 18,
+        # 19, 20, 21, Busted
+
 
 class Tree(object):
     """
@@ -391,16 +415,16 @@ class Tree(object):
     def add_a_statistical_card(self, stat_card):
         # New set of leaves in the tree
         leaves = []
-        for p in self.tree[-1] :
-            for v in stat_card :
+        for p in self.tree[-1]:
+            for v in stat_card:
                 new_value = v + p
                 proba = self.tree[-1][p] * stat_card[v]
-                if (new_value > 21) :
+                if (new_value > 21):
                     # All busted values are 22
                     new_value = 22
-                if (new_value in leaves) :
+                if (new_value in leaves):
                     leaves[new_value] = leaves[new_value] + proba
-                else :
+                else:
                     leaves[new_value] = proba
 
 
@@ -491,9 +515,6 @@ class Game(object):
             win, bet = self.get_hand_winnings(hand)
             self.money += win
             self.bet += bet
-            # print "Player Hand: %s %s (Value: %d, Busted: %r, BlackJack: %r, Splithand: %r, Soft: %r, Surrender: %r, Doubled: %r)" % (hand, status, hand.value, hand.busted(), hand.blackjack(), hand.splithand, hand.soft(), hand.surrender, hand.doubled)
-
-        # print "Dealer Hand: %s (%d)" % (self.dealer.hand, self.dealer.hand.value)
 
     def get_money(self):
         return self.money
@@ -504,7 +525,8 @@ class Game(object):
 
 if __name__ == "__main__":
     importer = StrategyImporter(sys.argv[1])
-    HARD_STRATEGY, SOFT_STRATEGY, PAIR_STRATEGY = importer.import_player_strategy()
+    HARD_STRATEGY, SOFT_STRATEGY, PAIR_STRATEGY = (
+        importer.import_player_strategy())
 
     moneys = []
     bets = []
@@ -519,8 +541,10 @@ if __name__ == "__main__":
         while not game.shoe.reshuffle:
             # print '%s GAME no. %d %s' % (20 * '#', i + 1, 20 * '#')
             game.play_round()
-            print("Dealer Hand: %s (%d)" % (game.dealer.hand, game.dealer.hand.value))
-            print("Player Hand: %s (%d)\n" % (game.player.hands[0], game.player.hands[0].value))
+            print("Dealer Hand: %s (%d)" %
+                  (game.dealer.hand, game.dealer.hand.value))
+            print("Player Hand: %s (%d)\n" %
+                  (game.player.hands[0], game.player.hands[0].value))
 
             nb_hands += 1
 
@@ -528,7 +552,9 @@ if __name__ == "__main__":
         bets.append(game.get_bet())
         countings += game.shoe.count_history
 
-        print("WIN for Game no. %d: %s (%s bet)" % (g + 1, "{0:.2f}".format(game.get_money()), "{0:.2f}".format(game.get_bet())))
+        print("WIN for Game no. %d: %s (%s bet)" %
+              (g + 1, "{0:.2f}".format(game.get_money()),
+               "{0:.2f}".format(game.get_bet())))
 
     sume = 0.0
     total_bet = 0.0
@@ -537,12 +563,15 @@ if __name__ == "__main__":
     for value in bets:
         total_bet += value
 
-    print("\n%d hands overall, %0.2f hands per game on average" % (nb_hands, float(nb_hands) / GAMES))
+    print("\n%d hands overall, %0.2f hands per game on average" %
+          (nb_hands, float(nb_hands) / GAMES))
     print("%0.2f total bet" % total_bet)
-    print("Overall winnings: {} (edge = {} %)".format("{0:.2f}".format(sume), "{0:.3f}".format(100.0 * sume / total_bet)))
+    print("Overall winnings: {} (edge = {} %)".format(
+            "{0:.2f}".format(sume), "{0:.3f}".format(100.0 * sume / total_bet))
+          )
 
     moneys = sorted(moneys)
-    fit = stats.norm.pdf(moneys, np.mean(moneys), np.std(moneys))  # this is a fitting indeed
+    fit = stats.norm.pdf(moneys, np.mean(moneys), np.std(moneys))
     pl.plot(moneys, fit, '-o')
     pl.hist(moneys, normed=True)
     pl.show()
